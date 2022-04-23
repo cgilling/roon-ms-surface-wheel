@@ -8,8 +8,8 @@
     "dependencies": {
         "debug": "^3.1.0",
         "node-roon-api": "github:roonlabs/node-roon-api",
+        "node-roon-api-settings": "github:roonlabs/node-roon-api-settings",
         "node-roon-api-status": "github:roonlabs/node-roon-api-status",
-        "node-roon-api-transport": "github:roonlabs/node-roon-api-transport",
-        "node-roon-api-settings": "github:roonlabs/node-roon-api-settings"
+        "node-roon-api-transport": "github:roonlabs/node-roon-api-transport"
     }
 }

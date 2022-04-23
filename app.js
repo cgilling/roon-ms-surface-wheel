@@ -4,6 +4,35 @@ var RoonApi = require("node-roon-api"),
     RoonApiSettings = require("node-roon-api-settings");
 
 var my_core
+var current_zones
+
+function subscribe_zones(cmd, data) {
+    var changed = false
+    if (cmd === 'Subscribed') {
+        current_zones = Object.fromEntries(data.zones.map(z => ([z.zone_id, z])))
+        changed = true
+    }
+    if (cmd === 'Changed') {
+        if (data.hasOwnProperty('zones_removed')) {
+            for (const zone_id of data.zones_removed) {
+                if (current_zones.hasOwnProperty(zone_id)) {
+                    delete current_zones[zone_id]
+                    changed = true
+                }
+            }
+        }
+        if (data.hasOwnProperty('zones_added')) {
+            current_zones = {
+                ...current_zones,
+                ...Object.fromEntries(data.zones_added.map(z => ([z.zone_id, z])))
+            }
+            changed = true
+        }
+    }
+    if (changed) {
+        console.log("Current Zones Updated", Object.values(current_zones).map(z => ({ zone_id: z.zone_id, name: z.display_name })))
+    }
+}
 
 var roon = new RoonApi({
     extension_id: 'com.github.cgilling.roon-ms-surface-wheel',
@@ -19,14 +48,7 @@ var roon = new RoonApi({
         })
         my_core = core
 
-        transport.subscribe_zones(function (cmd, data) {
-            console.log("SUBSCRIBE ZONES!!!!", core.core_id,
-                core.display_name,
-                core.display_version,
-                "-",
-                cmd,
-                JSON.stringify(data, null, '  '));
-        });
+        transport.subscribe_zones(subscribe_zones);
     },
 
     core_unpaired: function (core) {
@@ -67,36 +89,18 @@ function make_layout(settings, zones) {
 var svc_status = new RoonApiStatus(roon);
 var svc_settings = new RoonApiSettings(roon, {
     get_settings: function (cb) {
-        if (my_core) {
-            my_core.services.RoonApiTransport.get_zones(
-                (error, data) => {
-                    let settings = mysettings
-                    let zones = data.zones
-                    console.log(zones)
-                    cb(make_layout(settings, zones));
-                }
-            )
-        } else {
-            cb(make_layout(mysettings));
-        }
+        cb(make_layout(mysettings, Object.values(current_zones)));
     },
     save_settings: function (req, isdryrun, settings) {
-        // TODO: handle if there is no my_core
-        my_core.services.RoonApiTransport.get_zones(
-            (error, data) => {
-                let new_settings = settings.values
-                let zones = error ? false : data.zones
+        let new_settings = settings.values
+        let l = make_layout(new_settings, Object.values(current_zones));
+        req.send_complete(l.has_error ? "NotValid" : "Success", { settings: l });
 
-                let l = make_layout(new_settings, zones);
-                req.send_complete(l.has_error ? "NotValid" : "Success", { settings: l });
-
-                if (!isdryrun && !l.has_error) {
-                    mysettings = l.values;
-                    svc_settings.update_settings(l);
-                    roon.save_config("settings", mysettings);
-                }
-            }
-        )
+        if (!isdryrun && !l.has_error) {
+            mysettings = l.values;
+            svc_settings.update_settings(l);
+            roon.save_config("settings", mysettings);
+        }
     }
 });
 

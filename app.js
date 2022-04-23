@@ -2,7 +2,8 @@ var express = require('express'),
     RoonApi = require("node-roon-api"),
     RoonApiStatus = require("node-roon-api-status"),
     RoonApiTransport = require("node-roon-api-transport"),
-    RoonApiSettings = require("node-roon-api-settings");
+    RoonApiSettings = require("node-roon-api-settings"),
+    ClickManager = require('./click-manager');
 
 var argv = require('minimist')(process.argv.slice(2));
 function is_production() {
@@ -176,6 +177,13 @@ function previous_track() {
     my_core.services.RoonApiTransport.control(mysettings.zone_id, 'previous')
 }
 
+clickManager = new ClickManager({
+    doubleClickTimeout: 2000,
+    clickCallback: () => { console.log('single click') },
+    doubleClickCallback: () => { console.log('double click') }
+
+})
+
 
 const app = express()
 const port = 3000
@@ -227,6 +235,11 @@ app.get('/previous-track', (req, res) => {
         return
     }
     res.send('Previous Track Initiated')
+})
+
+app.get('/click', (req, res) => {
+    clickManager.processClick()
+    res.send('Click Initiated')
 })
 
 app.listen(port, () => {

@@ -1,7 +1,13 @@
-var RoonApi = require("node-roon-api"),
+var express = require('express'),
+    RoonApi = require("node-roon-api"),
     RoonApiStatus = require("node-roon-api-status"),
     RoonApiTransport = require("node-roon-api-transport"),
     RoonApiSettings = require("node-roon-api-settings");
+
+var argv = require('minimist')(process.argv.slice(2));
+function is_production() {
+    return argv.hasOwnProperty('production') && argv['production'] === 'true'
+}
 
 var my_core
 var current_zones
@@ -100,9 +106,14 @@ var svc_settings = new RoonApiSettings(roon, {
             mysettings = l.values;
             svc_settings.update_settings(l);
             roon.save_config("settings", mysettings);
+            svc_status.set_status("All is good", false);
         }
     }
 });
+
+if (is_production()) {
+    roon.log_level = 'none'
+}
 
 
 roon.init_services({
@@ -112,12 +123,112 @@ roon.init_services({
 
 svc_status.set_status("All is good", false);
 
-/*
-function process_zones(success, zones) {
-    debug("%d: %s", success, zones)
+roon.start_discovery();
+
+// returns false if everything is fine, error string otherwise
+function zone_check() {
+    if (!my_core) {
+        return "no core"
+    }
+
+    if (!(mysettings.zone_id in current_zones)) {
+        svc_status.set_status("invalid zone selected", true)
+        return "invalid zone selected: " + mysettings.zone_id
+    }
 }
 
-svc_api_transport.get_zones(process_zones)
-*/
+function volume_change_step(relative_step) {
+    err = zone_check()
+    if (err) {
+        return err
+    }
 
-roon.start_discovery();
+    for (const output of current_zones[mysettings.zone_id].outputs) {
+        my_core.services.RoonApiTransport.change_volume(output, 'relative_step', relative_step, (error => {
+            if (error) {
+                console.log("volume up failed for output", output.output_id, error)
+            }
+        }))
+    }
+}
+
+function play_pause() {
+    err = zone_check()
+    if (err) {
+        return err
+    }
+    my_core.services.RoonApiTransport.control(mysettings.zone_id, 'playpause')
+}
+
+function next_track() {
+    err = zone_check()
+    if (err) {
+        return err
+    }
+    my_core.services.RoonApiTransport.control(mysettings.zone_id, 'next')
+}
+
+function previous_track() {
+    err = zone_check()
+    if (err) {
+        return err
+    }
+    my_core.services.RoonApiTransport.control(mysettings.zone_id, 'previous')
+}
+
+
+const app = express()
+const port = 3000
+
+app.get('/', (req, res) => {
+    res.send('Hello World!')
+})
+
+app.get('/volume-up', (req, res) => {
+    err = volume_change_step(1)
+    if (err) {
+        res.send(err)
+        return
+    }
+    res.send('Volume Up Initiated')
+})
+
+app.get('/volume-down', (req, res) => {
+    err = volume_change_step(-1)
+    if (err) {
+        res.send(err)
+        return
+    }
+    res.send('Volume Down Initiated')
+})
+
+app.get('/play-pause', (req, res) => {
+    err = play_pause()
+    if (err) {
+        res.send(err)
+        return
+    }
+    res.send('Play/Pause Initiated')
+})
+
+app.get('/next-track', (req, res) => {
+    err = next_track()
+    if (err) {
+        res.send(err)
+        return
+    }
+    res.send('Next Track Initiated')
+})
+
+app.get('/previous-track', (req, res) => {
+    err = previous_track()
+    if (err) {
+        res.send(err)
+        return
+    }
+    res.send('Previous Track Initiated')
+})
+
+app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+})

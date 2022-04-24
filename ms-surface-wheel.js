@@ -6,13 +6,21 @@ const devicesFilePath = '/proc/bus/input/devices'
 function MSSurfaceWheel(config) {
     this.errorOccurred = config.errorOccurred
     this.configureSuccess = config.configureSuccess
-    this.turnedClockwise = config.turnedClockwise
-    this.turnedCounterClockwise = config.turnedCounterClockwise
-    this.buttonPressed = config.buttonPressed
+    this.turned = config.turned
+    this.buttonUp = config.buttonUp
+    this.buttonDown = config.buttonDown
     this.inputManager = undefined
+
+    this.turnStepsPerClick = 50
 
     this.wheelEvent = undefined
     this.wheelEventValue = undefined
+
+    this.isButtonDown = false
+
+    this.currentEvent = undefined
+    this.currentEventTurnValueTotal = 0
+    this.currentEventTurnClicksProcessed = 0
 
     fs.readFile(devicesFilePath, 'utf8', (err, data) => this.onDeviceFileRead(err, data))
 }
@@ -90,15 +98,52 @@ MSSurfaceWheel.prototype.eventReceived = function (inputEvent) {
         }
     }
     if (event == EV_END) {
-        console.log("MSSurfaceWheel event processed", this.wheelEvent, this.wheelEventValue)
-        // TODO: call a function to handle this
+        //console.log("MSSurfaceWheel event processed", this.wheelEvent, this.wheelEventValue)
+        this.processWheelEvent(this.wheelEvent, this.wheelEventValue)
         this.wheelEvent = undefined
         this.wheelEventValue = undefined
     } else {
         this.wheelEvent = event
         this.wheelEventValue = inputEvent.value
     }
+}
 
+MSSurfaceWheel.prototype.processWheelEvent = function (event, value) {
+    if (event === EV_TURN) {
+        if (this.currentEvent !== EV_TURN) {
+            this.currentEventTurnClicksProcessed = 0
+            this.currentEventTurnValueTotal = 0
+        }
+        // we reset stuff if the wheel start spinning in the opposite direction
+        if (this.currentEventTurnValueTotal < 0 && value > 0 ||
+            this.currentEventTurnValueTotal > 0 && value < 0) {
+            this.currentEventTurnClicksProcessed = 0
+            this.currentEventTurnValueTotal = 0
+        }
+
+        this.currentEventTurnValueTotal += value
+        let desiredClicks = Math.trunc(this.currentEventTurnValueTotal / this.turnStepsPerClick)
+        if (desiredClicks != this.currentEventTurnClicksProcessed) {
+            let newClicks = desiredClicks - this.currentEventTurnClicksProcessed
+            this.turned(newClicks)
+            this.currentEventTurnClicksProcessed = desiredClicks
+        }
+    }
+    if (event == EV_BUTTON_PRESS) {
+        if (value == 1) {
+            this.isButtonDown = true
+            if (this.buttonDown) {
+                this.buttonDown()
+            }
+        }
+        if (value == 0) {
+            this.isButtonDown = false
+            if (this.buttonUp) {
+                this.buttonUp()
+            }
+        }
+    }
+    this.currentEvent = event
 }
 
 MSSurfaceWheel.prototype.eventErrorOccurred = function (err) {

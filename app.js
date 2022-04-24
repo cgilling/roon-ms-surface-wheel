@@ -4,7 +4,6 @@ var express = require('express'),
     RoonApiTransport = require("node-roon-api-transport"),
     RoonApiSettings = require("node-roon-api-settings"),
     ClickManager = require('./click-manager'),
-    InputManager = require('./input-manager'),
     MSSurfaceWheel = require('./ms-surface-wheel'),
     gpio = require('rpi-gpio');
 
@@ -141,14 +140,14 @@ function zone_check() {
     }
 }
 
-function volume_change_step(relative_step) {
+function volume_change_relative(relative_amount) {
     err = zone_check()
     if (err) {
         return err
     }
 
     for (const output of current_zones[mysettings.zone_id].outputs) {
-        my_core.services.RoonApiTransport.change_volume(output, 'relative_step', relative_step, (error => {
+        my_core.services.RoonApiTransport.change_volume(output, 'relative', relative_amount, (error => {
             if (error) {
                 console.log("volume up failed for output", output.output_id, error)
             }
@@ -182,10 +181,17 @@ function previous_track() {
 
 clickManager = new ClickManager({
     doubleClickTimeout: 2000,
-    clickCallback: () => { console.log('single click') },
-    doubleClickCallback: () => { console.log('double click') }
-
+    clickCallback: (clickCount) => {
+        console.log('click manager', clickCount)
+        if (clickCount === 1) {
+            play_pause()
+        }
+    },
 })
+
+let lastTrackChange = Date.now()
+let didChangeTrack = false
+const trackChangeWaitMillis = 500
 
 msSurfaceWheel = new MSSurfaceWheel({
     errorOccurred: err => {
@@ -196,14 +202,32 @@ msSurfaceWheel = new MSSurfaceWheel({
         console.log("MSSurfaceWheel configureSuccess")
         svc_status.set_status("Connected to Surface Wheel", false);
     },
-    turnedClockwise: amount => {
-        console.log("MSSurfaceWheel turnedClockwise", amount)
+    turned: amount => {
+        if (msSurfaceWheel.isButtonDown) {
+            if (Date.now() - lastTrackChange > trackChangeWaitMillis) {
+                if (amount < 0) {
+                    previous_track()
+                } else {
+                    next_track()
+                }
+                lastTrackChange = Date.now()
+                didChangeTrack = true
+            }
+        } else {
+            volume_change_relative(amount)
+        }
     },
-    turnedCounterClockwise: amount => {
-        console.log("MSSurfaceWheel turnedCounterClockwise", amount)
+    buttonUp: () => {
+        console.log("MSSurfaceWheel buttonUp")
+        if (!didChangeTrack) {
+            clickManager.processClick()
+        }
     },
-    buttonPressed: () => {
-        console.log("MSSurfaceWheel buttonPressed")
+    buttonDown: () => {
+        console.log("MSSurfaceWheel buttonDown")
+        // this will force a bit of time before we'll change a track
+        lastTrackChange = Date.now()
+        didChangeTrack = false
     }
 })
 
@@ -237,7 +261,7 @@ app.get('/', (req, res) => {
 })
 
 app.get('/volume-up', (req, res) => {
-    err = volume_change_step(1)
+    err = volume_change_relative(1)
     if (err) {
         res.send(err)
         return
@@ -246,7 +270,7 @@ app.get('/volume-up', (req, res) => {
 })
 
 app.get('/volume-down', (req, res) => {
-    err = volume_change_step(-1)
+    err = volume_change_relative(-1)
     if (err) {
         res.send(err)
         return

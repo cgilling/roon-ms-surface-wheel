@@ -2,31 +2,30 @@
     Heavily influence by https://medium.com/zattoo_tech/repeatable-double-click-and-hybrid-clicks-solution-with-usedoubleclick-hook-c6c64449abf7
 */
 
-const DEFAULT_DOUBLE_CLICK_TIMEOUT = 200
+const DEFAULT_MULTI_CLICK_TIMEOUT = 250
 
 /**
 ClickManager.                                   
  * @class ClickManager
  * @param {object} config - Information about your extension. Used by Roon to display to the end user what is trying to access Roon.
- * @param {number} config.doubleClickTimeout - A unique ID for this extension. Something like @com.your_company_or_name.name_of_extension@.
- * @param {ClickManager~clickCallback} [config.clickCallback] - Called when a single click is detected.
- * @param {ClickManager~doubleClickCallback} [config.doubleClickCallback] - Called when a double click is detected.
+ * @param {number} config.multiClickTimeout - How many milliseconds to allow between clicks when collecting them
+ * @param {ClickManager~clickCallback} [config.clickCallback] - called after clicks have been collected
  */
 /**
  * @callback RoonApi~clickCallback
+ * @param clickCount
  */
 /**
  * @callback RoonApi~doubleClickCallback
  */
 
 function ClickManager(config) {
-    if (config.doubleClickTimeout) {
-        this.doubleClickTimeout = config.doubleClickTimeout
+    if (config.multiClickTimeout) {
+        this.multiClickTimeout = config.multiClickTimeout
     } else {
-        this.doubleClickTimeout = DEFAULT_DOUBLE_CLICK_TIMEOUT
+        this.multiClickTimeout = DEFAULT_MULTI_CLICK_TIMEOUT
     }
     this.clickCallback = config.clickCallback
-    this.doubleClickCallback = config.doubleClickCallback
 
     this.clickCount = 0
     this.clickTimeout = undefined
@@ -44,15 +43,9 @@ ClickManager.prototype.processClick = function () {
 
     this.clickCount += 1
     this.clickTimeout = setTimeout(() => {
-        if (this.clickCount === 1) {
-            this.clickCallback()
-        }
+        this.clickCallback(this.clickCount)
         this.clickCount = 0
-    }, this.doubleClickTimeout);
-
-    if (this.clickCount % 2 === 0) {
-        this.doubleClickCallback()
-    }
+    }, this.clickCount <= 1 ? this.multiClickTimeout : this.multiClickTimeout * 2);
 }
 
 exports = module.exports = ClickManager

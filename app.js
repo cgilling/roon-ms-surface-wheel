@@ -3,11 +3,17 @@ var express = require('express'),
     RoonApiStatus = require("node-roon-api-status"),
     RoonApiTransport = require("node-roon-api-transport"),
     RoonApiSettings = require("node-roon-api-settings"),
-    ClickManager = require('./click-manager');
+    ClickManager = require('./click-manager'),
+    InputManager = require('./input-manager'),
+    MSSurfaceWheel = require('./ms-surface-wheel'),
+    gpio = require('rpi-gpio');
 
 var argv = require('minimist')(process.argv.slice(2));
 function is_production() {
     return argv.hasOwnProperty('production') && argv['production'] === 'true'
+}
+function enable_led_gpio() {
+    return argv.hasOwnProperty('enable-led-gpio') && argv['enable-led-gpio'] === 'true'
 }
 
 var my_core
@@ -50,9 +56,6 @@ var roon = new RoonApi({
     website: 'https://github.com/cgilling/roon-ms-surface-wheel',
     core_paired: function (core) {
         let transport = core.services.RoonApiTransport;
-        transport.get_zones((error, data) => {
-            console.log(error, data)
-        })
         my_core = core
 
         transport.subscribe_zones(subscribe_zones);
@@ -122,7 +125,7 @@ roon.init_services({
     provided_services: [svc_status, svc_settings],
 });
 
-svc_status.set_status("All is good", false);
+svc_status.set_status("Starting up", false);
 
 roon.start_discovery();
 
@@ -183,6 +186,47 @@ clickManager = new ClickManager({
     doubleClickCallback: () => { console.log('double click') }
 
 })
+
+msSurfaceWheel = new MSSurfaceWheel({
+    errorOccurred: err => {
+        console.log("MSSurfaceWheel errorOccured", err)
+        svc_status.set_status("Problems connecting to Surface Wheel", true);
+    },
+    configureSuccess: function () {
+        console.log("MSSurfaceWheel configureSuccess")
+        svc_status.set_status("Connected to Surface Wheel", false);
+    },
+    turnedClockwise: amount => {
+        console.log("MSSurfaceWheel turnedClockwise", amount)
+    },
+    turnedCounterClockwise: amount => {
+        console.log("MSSurfaceWheel turnedCounterClockwise", amount)
+    },
+    buttonPressed: () => {
+        console.log("MSSurfaceWheel buttonPressed")
+    }
+})
+
+/* NOTE: this is a proof of concept of trying to controll the onboard
+ *       LEDs as a status indicator. I could get the power led to work,
+ *       but couldn't figure out how to get the activity one to work
+ *
+ *       Tried adding the following to /boot/config.txt:
+ *           dtparam=act_led_trigger=gpio
+ *           dtparam=pwr_led_trigger=gpio
+ *           dtparam=act-led,gpio=21
+ *           dtparam=act_led_gpio=21
+ *           dtparam=pwr_led_gpio=26 
+ */
+if (enable_led_gpio()) {
+    gpio.setMode(gpio.MODE_BCM)
+    gpio.setup(26, gpio.DIR_HIGH, err => {
+        console.log("gpio.setup", err)
+        gpio.write(26, false, err => {
+            console.log("gpio.write", err)
+        })
+    })
+}
 
 
 const app = express()

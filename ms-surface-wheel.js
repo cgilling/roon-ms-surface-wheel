@@ -27,11 +27,12 @@ function MSSurfaceWheel(config) {
 
 MSSurfaceWheel.prototype.onDeviceFileRead = function (err, data) {
     if (err) {
-        this.errorOccurred('error listing input devicess: ' + err)
+        this.errorOccurred('error listing input devices: ' + err)
         setTimeout(function (self) {
             fs.readFile(devicesFilePath, 'utf8', (err, data) => self.onDeviceFileRead(err, data))
         },
-            5000, this);
+            500, this);
+        return
     }
     parts = data.split("\n\n")
     for (const part of parts) {
@@ -57,7 +58,7 @@ MSSurfaceWheel.prototype.onDeviceFileRead = function (err, data) {
     setTimeout(function (self) {
         fs.readFile(devicesFilePath, 'utf8', (err, data) => self.onDeviceFileRead(err, data))
     },
-        5000, this);
+        500, this);
 }
 
 const EV_TURN = 'TURN',

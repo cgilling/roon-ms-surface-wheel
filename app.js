@@ -5,7 +5,7 @@ var express = require('express'),
     RoonApiSettings = require("node-roon-api-settings"),
     ClickManager = require('./click-manager'),
     MSSurfaceWheel = require('./ms-surface-wheel'),
-    gpio = require('rpi-gpio');
+    RGBLED = require('./rgb-led');
 
 var argv = require('minimist')(process.argv.slice(2));
 function is_production() {
@@ -13,6 +13,16 @@ function is_production() {
 }
 function enable_led_gpio() {
     return argv.hasOwnProperty('enable-led-gpio') && argv['enable-led-gpio'] === 'true'
+}
+
+let led = undefined
+if (enable_led_gpio()) {
+    console.log("setting up LED")
+    led = new RGBLED({
+        redPin: 20,
+        greenPin: 16,
+        bluePin: 21,
+    })
 }
 
 var my_core
@@ -195,12 +205,22 @@ const trackChangeWaitMillis = 500
 
 msSurfaceWheel = new MSSurfaceWheel({
     errorOccurred: err => {
-        console.log("MSSurfaceWheel errorOccured", err)
-        svc_status.set_status("Problems connecting to Surface Wheel", true);
+        statusMsg = "Problems connecting to Surface Wheel"
+        if (!is_production() || svc_status._message !== statusMsg) {
+            console.log("MSSurfaceWheel errorOccured", err)
+        }
+        svc_status.set_status(statusMsg, true);
+        if (led) {
+            led.setColor(0, 0, 0)
+        }
     },
     configureSuccess: function () {
         console.log("MSSurfaceWheel configureSuccess")
         svc_status.set_status("Connected to Surface Wheel", false);
+        if (led) {
+            //led.setColor(237 / 15, 100 / 12, 237 / 15)
+            led.setColor(9, 5, 9)
+        }
     },
     turned: amount => {
         if (msSurfaceWheel.isButtonDown) {
@@ -218,39 +238,16 @@ msSurfaceWheel = new MSSurfaceWheel({
         }
     },
     buttonUp: () => {
-        console.log("MSSurfaceWheel buttonUp")
         if (!didChangeTrack) {
             clickManager.processClick()
         }
     },
     buttonDown: () => {
-        console.log("MSSurfaceWheel buttonDown")
         // this will force a bit of time before we'll change a track
         lastTrackChange = Date.now()
         didChangeTrack = false
     }
 })
-
-/* NOTE: this is a proof of concept of trying to controll the onboard
- *       LEDs as a status indicator. I could get the power led to work,
- *       but couldn't figure out how to get the activity one to work
- *
- *       Tried adding the following to /boot/config.txt:
- *           dtparam=act_led_trigger=gpio
- *           dtparam=pwr_led_trigger=gpio
- *           dtparam=act-led,gpio=21
- *           dtparam=act_led_gpio=21
- *           dtparam=pwr_led_gpio=26 
- */
-if (enable_led_gpio()) {
-    gpio.setMode(gpio.MODE_BCM)
-    gpio.setup(26, gpio.DIR_HIGH, err => {
-        console.log("gpio.setup", err)
-        gpio.write(26, false, err => {
-            console.log("gpio.write", err)
-        })
-    })
-}
 
 
 const app = express()

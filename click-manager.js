@@ -45,7 +45,7 @@ ClickManager.prototype.processClick = function () {
     this.clickTimeout = setTimeout(() => {
         this.clickCallback(this.clickCount)
         this.clickCount = 0
-    }, this.clickCount <= 1 ? this.multiClickTimeout : this.multiClickTimeout * 2);
+    }, this.clickCount <= 1 ? this.multiClickTimeout : this.multiClickTimeout * 1.5);
 }
 
 exports = module.exports = ClickManager

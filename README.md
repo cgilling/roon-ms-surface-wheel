@@ -47,6 +47,10 @@ I followed these steps to pair the device: https://cuteprogramming.wordpress.com
 
 TODO: summarize the commands here
 
+#### Setting up pigpio for LED control
+
+https://github.com/guymcswain/pigpio-client/wiki/Install-and-configure-pigpiod
+
 #### Clone and startup roon-ms-surface-wheel
 
 ```shell

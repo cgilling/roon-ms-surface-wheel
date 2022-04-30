@@ -6,6 +6,7 @@
     "author": "Christopher Gilling",
     "license": "Apache-2.0",
     "dependencies": {
+        "async-exit-hook": "^2.0.1",
         "debug": "^3.1.0",
         "express": "^4.17.3",
         "minimist": "^1.2.6",
@@ -13,6 +14,8 @@
         "node-roon-api-settings": "github:roonlabs/node-roon-api-settings",
         "node-roon-api-status": "github:roonlabs/node-roon-api-status",
         "node-roon-api-transport": "github:roonlabs/node-roon-api-transport",
+        "pigpio": "^3.3.1",
+        "pigpio-client": "^1.5.2",
         "rpi-gpio": "^2.1.7"
     }
 }
